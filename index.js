@@ -16,13 +16,11 @@ app.get('/', (req, res) => {
   });
 
 // server그런 다음 들어오는 소켓에 대한 이벤트를 수신 connection하고 이를 콘솔에 기록합니다.
-io.on('connection', (socket) => {
-console.log('a user connected');
-socket.on('disconnect', () => { //  disconnect이벤트를 발생시킵니다:
-    console.log('user disconnected');
+io.on("connection", (socket) => {
+  socket.on("chat message", (msg) => {
+    console.log("message: " + msg);
   });
 });
-
 
 // 우리는 http 서버가 포트 3000에서 수신 대기하도록 만듭니다.
 server.listen(8000, () => {

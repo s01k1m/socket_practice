@@ -16,15 +16,26 @@
       #messages > li:nth-child(odd) { background: #efefef; }
     </style>
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>.
-      <script>
-        const socket = io(); // 을 호출할 때 URL을 지정하지 않았는데 io(), 이는 기본적으로 페이지를 제공하는 호스트에 연결을 시도하기 때문입니다.
-      </script>
-  </head>
+    </head>
 
   <body>
     <ul id="messages"></ul>
     <form id="form" action="">
       <input id="input" autocomplete="off" /><button>Send</button>
     </form>
+    <script>
+        const socket = io(); // 을 호출할 때 URL을 지정하지 않았는데 io(), 이는 기본적으로 페이지를 제공하는 호스트에 연결을 시도하기 때문입니다.
+
+        const form = document.getElementById('form');
+        const input = document.getElementById('input');
+
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (input.value) {
+                socket.emit('chat message', input.value);
+                input.value = '';
+            }
+        });
+    </script>
   </body>
 </html>
