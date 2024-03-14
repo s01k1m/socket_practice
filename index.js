@@ -19,10 +19,14 @@ app.get('/', (req, res) => {
 io.on("connection", (socket) => {
   socket.on("chat message", (msg) => {
     console.log("message: " + msg);
+    io.emit("chat message", msg);
   });
 });
 
-// 우리는 http 서버가 포트 3000에서 수신 대기하도록 만듭니다.
+// 서버와 연결된 모든이에게 emit 합니다
+
+
+// 우리는 http 서버가 포트 8000에서 수신 대기하도록 만듭니다.
 server.listen(8000, () => {
   console.log('server running at http://localhost:8000');
 });
