@@ -65,7 +65,12 @@
       <button id="toggle-btn">Disconnect</button>
     </form>
     <script>
-      const socket = io(); // 을 호출할 때 URL을 지정하지 않았는데 io(), 이는 기본적으로 페이지를 제공하는 호스트에 연결을 시도하기 때문입니다.
+      //The client will then keep track of the offset:
+      const socket = io({
+        auth: {
+          serverOffset: 0
+        }
+      });
 
       const form = document.getElementById("form");
       const input = document.getElementById("input");
@@ -97,11 +102,13 @@
         }
       });
       // 서버로부터 메시지 받으면 화면에 뿌려주는 로직
-      socket.on("chat message", (msg) => {
+      // serverOffset 추가
+      socket.on('chat message', (msg, serverOffset) => {
         const item = document.createElement("li");
         item.textContent = msg;
         messages.appendChild(item);
         window.scrollTo(0, document.body.scrollHeight);
+        socket.auth.serverOffset = serverOffset;
       });
 
     </script>
