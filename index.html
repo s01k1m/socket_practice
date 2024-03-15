@@ -65,11 +65,15 @@
       <button id="toggle-btn">Disconnect</button>
     </form>
     <script>
+      let counter = 0;
+
       //The client will then keep track of the offset:
       const socket = io({
         auth: {
-          serverOffset: 0
-        }
+          serverOffset: 0, // enable retries
+          ackTimeout: 10000,
+          retries: 3,
+        },
       });
 
       const form = document.getElementById("form");
@@ -83,34 +87,35 @@
         if (!socket.connected) {
           toggleButton.innerText = "Connect";
           socket.connect();
-
         } else {
           toggleButton.innerText = "Disconnect";
           socket.disconnect();
           const item = document.createElement("li");
           item.textContent = "User disconnected";
           messages.appendChild(item);
-          window.scrollTo(0, document.body.scrollHeight)
+          window.scrollTo(0, document.body.scrollHeight);
         }
       });
       // 메세지 전송 로직
       form.addEventListener("submit", (e) => {
         e.preventDefault();
         if (input.value) {
+          // compute a unique offset
+          const clientOffset = `${socket.id}-${counter++}`;
+          socket.emit("chat message", input.value, clientOffset);
           socket.emit("chat message", input.value);
           input.value = "";
         }
       });
       // 서버로부터 메시지 받으면 화면에 뿌려주는 로직
       // serverOffset 추가
-      socket.on('chat message', (msg, serverOffset) => {
+      socket.on("chat message", (msg, serverOffset) => {
         const item = document.createElement("li");
         item.textContent = msg;
         messages.appendChild(item);
         window.scrollTo(0, document.body.scrollHeight);
         socket.auth.serverOffset = serverOffset;
       });
-
     </script>
   </body>
 </html>
