@@ -4,6 +4,22 @@ const { join } = require('node:path');
 const { Server } = require('socket.io');
 const sqlite3 = require("sqlite3"); // SQlite 연결
 const { open } = require("sqlite");
+const { availableParallelism } = require("node:os"); // 수평적 확장 어댑터
+const cluster = require("node:cluster");
+const { createAdapter, setupPrimary } = require("@socket.io/cluster-adapter");
+
+if (cluster.isPrimary) {
+  const numCPUs = availableParallelism();
+  // create one worker per available core
+  for (let i = 0; i < numCPUs; i++) {
+    cluster.fork({
+      PORT: 3000 + i,
+    });
+  }
+
+  // set up the adapter on the primary thread
+  return setupPrimary();
+}
 
 async function main() {
   const db = await open({
@@ -23,6 +39,8 @@ async function main() {
   const server = createServer(app);
   const io = new Server(server, {
     connectionStateRecovery: {},
+    // set up the adapter on each worker thread
+    adapter: createAdapter(),
   });
 
   app.get("/", (req, res) => {
@@ -30,28 +48,27 @@ async function main() {
   });
 
   io.on("connection", async (socket) => {
-
-  socket.on("chat message", async (msg, clientOffset, callback) => {
-    let result;
-    try {
-      result = await db.run(
-        "INSERT INTO messages (content, client_offset) VALUES (?, ?)",
-        msg,
-        clientOffset
-      );
-    } catch (e) {
-      if (e.errno === 19 /* SQLITE_CONSTRAINT */) {
-        // the message was already inserted, so we notify the client
-        callback();
-      } else {
-        // nothing to do, just let the client retry
+    socket.on("chat message", async (msg, clientOffset, callback) => {
+      let result;
+      try {
+        result = await db.run(
+          "INSERT INTO messages (content, client_offset) VALUES (?, ?)",
+          msg,
+          clientOffset
+        );
+      } catch (e) {
+        if (e.errno === 19 /* SQLITE_CONSTRAINT */) {
+          // the message was already inserted, so we notify the client
+          callback();
+        } else {
+          // nothing to do, just let the client retry
+        }
+        return;
       }
-      return;
-    }
-    io.emit("chat message", msg, result.lastID);
-    // acknowledge the event
-    callback();
-  });
+      io.emit("chat message", msg, result.lastID);
+      // acknowledge the event
+      callback();
+    });
 
     if (!socket.recovered) {
       try {
@@ -68,8 +85,11 @@ async function main() {
     }
   });
 
-  server.listen(3000, () => {
-    console.log("server running at http://localhost:3000");
+  // each worker will listen on a distinct port
+  const port = process.env.PORT;
+
+  server.listen(port, () => {
+    console.log(`server running at http://localhost:${port}`);
   });
 }
 

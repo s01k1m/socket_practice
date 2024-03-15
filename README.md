@@ -272,3 +272,105 @@ socket.on('chat message', async (msg, clientOffset, callback) => {
   callback();
 });
 ```
+
+#
+Now that our application is resilient to temporary network interruptions, let's see how we can horizontally scale it in order to be able to support thousands of concurrent clients.
+이제 우리 어플리케이션은 일시적은 네트워크 장애에도 유지됩니다. 수천명의 클라이언트를 감당하기 위해 수평적인 스케일 확대는 어떻게 해야할지 봅시다.
+
+NOTE
+- Horizontal scaling (also known as "scaling out") means adding new servers to your infrastructure to cope with new demands
+- Vertical scaling (also known as "scaling up") means adding more resources (processing power, memory, storage, ...) to your existing infrastructure
+
+
+First step: let's use all the available cores of the host. By default, Node.js runs your Javascript code in a single thread, which means that even with a 32-core CPU, only one core will be used. Fortunately, the Node.js cluster module provides a convenient way to create one worker thread per core.
+첫 번째 단계: 호스트의 사용 가능한 모든 코어를 사용하겠습니다. 기본적으로 Node.js는 단일 스레드에서 Javascript 코드를 실행합니다. 즉, 32코어 CPU에서도 하나의 코어만 사용됩니다. 다행히 Node.js cluster모듈은 코어당 하나의 작업자 스레드를 생성하는 편리한 방법을 제공합니다.
+
+We will also need a way to forward events between the Socket.IO servers. We call this component an "Adapter".
+또한 Socket.IO 서버 간에 이벤트를 전달하는 방법도 필요합니다. 우리는 이 구성 요소를 "어댑터"라고 부릅니다.
+
+![어댑터](https://socket.io/images/tutorial/adapter.png)
+
+```
+npm install @socket.io/cluster-adapter
+```
+
+
+```javascript
+// index.js
+const express = require('express');
+const { createServer } = require('node:http');
+const { join } = require('node:path');
+const { Server } = require('socket.io');
+const sqlite3 = require('sqlite3');
+const { open } = require('sqlite');
+const { availableParallelism } = require('node:os'); // 어댑터
+const cluster = require('node:cluster');
+const { createAdapter, setupPrimary } = require('@socket.io/cluster-adapter');
+
+if (cluster.isPrimary) {
+  const numCPUs = availableParallelism();
+  // create one worker per available core
+  for (let i = 0; i < numCPUs; i++) {
+    cluster.fork({
+      PORT: 3000 + i
+    });
+  }
+  
+  // set up the adapter on the primary thread
+  return setupPrimary();
+}
+
+async function main() {
+  const app = express();
+  const server = createServer(app);
+  const io = new Server(server, {
+    connectionStateRecovery: {},
+    // set up the adapter on each worker thread
+    adapter: createAdapter()
+  });
+
+  // [...]
+
+  // each worker will listen on a distinct port
+  const port = process.env.PORT;
+
+  server.listen(port, () => {
+    console.log(`server running at http://localhost:${port}`);
+  });
+}
+
+main();
+```
+That's it! This will spawn one worker thread per CPU available on your machine. Let's see it in action:
+ 그러면 컴퓨터에서 사용 가능한 CPU당 하나의 작업자 스레드가 생성됩니다
+
+ As you can see in the address bar, each browser tab is connected to a different Socket.IO server, and the adapter is simply forwarding the chat message events between them.
+
+ NOTE
+In most cases, you would also need to ensure that all the HTTP requests of a Socket.IO session reach the same server (also known as "sticky session").
+대부분의 경우, 너는 소켓.io 세션의 모든 HTTP 요청이 같은 서버에 요청하는지 확실히해야할 필요가 있다.
+This is not needed here though, as each Socket.IO server has its own port.
+지금 여기에서는 필요없지만, 왜냐면 지금은 각 소켓 서버에 자체 포트가 있기 때문에
+
+And that finally completes our chat application! In this tutorial, we have seen how to:
+
+send an event between the client and the server
+클라이언트와 서버사이에 이벤트를 주고받는 법
+broadcast an event to all or a subset of connected clients
+연결된 모든 클라이언트 또는 하위 집합에 이벤트를 브로드캐스트하는 법
+handle temporary disconnections
+일시적인 연결 끊김 처리
+scale up
+확장
+
+You should now have a better overview of the features provided by Socket.IO. Now it's your time to build your own realtime application!
+
+애플리케이션을 개선하기 위한 몇 가지 아이디어는 다음과 같습니다.
+
+누군가 연결하거나 연결을 끊을 때 연결된 사용자에게 메시지를 브로드캐스트합니다.
+별명에 대한 지원을 추가합니다.
+보낸 사용자에게 동일한 메시지를 보내지 마십시오. 대신 Enter 키를 누르는 즉시 메시지를 직접 추가하세요.
+"{user}님이 입력 중" 기능을 추가했습니다.
+누가 온라인에 있는지 보여주세요.
+비공개 메시지를 추가하세요.
+개선사항을 공유하세요!
